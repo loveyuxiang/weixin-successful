@@ -1,0 +1,77 @@
+#V2版本微信支付回调通知处理
+#author by 西瓜
+#blog http://www.580bang.com
+#tel 17095135002 18152558386
+#本示例仅供参考 不同之处还请指正！
+#http://www.580bang.com/xgsid-31.html
+
+#请注意 回调方法 notify(可取其他方法名) 不能有鉴权，要外网能访问！否则，不能回调成功！
+
+#附带订单查询使用方法 通过ajax调用即可，一般用于回调二次确认和前端跳转确认
+
+#要先引入WxPayPubHelper.php  博客或者群文件均有V2版本的类
+
+
+public function notify(){
+        //使用通用通知接口
+        $notify = new \Notify_pub();
+        //存储微信的回调
+        $xml = $GLOBALS['HTTP_RAW_POST_DATA'];
+        $notify->saveData($xml);
+        if($notify->checkSign() == FALSE){
+            $notify->setReturnParameter("return_code","FAIL");//返回状态码
+            $notify->setReturnParameter("return_msg","签名失败");//返回信息
+        }else{
+            $notify->setReturnParameter("return_code","SUCCESS");//设置返回码
+        }
+        $returnXml = $notify->returnXml();
+        echo $returnXml;
+
+        //请注意 以上的 正常引入微信支付V2类即可 其他的不要修改
+        //获取通知记录表所需要的字段信息
+        $info['notify_text']=$xml;
+        $info['notify_unique']=$notify->data["openid"];
+        $info['notify_id']=$notify->data["out_trade_no"];
+        $info['notify_wxnum']=$notify->data["transaction_id"];
+
+        if($notify->checkSign() == TRUE)
+        {
+            if ($notify->data["return_code"] == "FAIL") {
+                //此处应该更新一下订单状态，商户自行增删操作
+            }else{
+                //判断是否回调过 防止多次回调造成数据重复累加
+                $notifyinfo = sql语句;
+                if(empty($notifyinfo)){
+                    //更改订单状态(你的sql语句)
+                    ........
+                    //这是laravel示例语句 请更改为TP插入语句（记录表notify）
+                    DB::table('notify')->insert($info);//记录通知记录（一种来源可追溯 另外可以排重）
+                    echo "SUCCESS";//告诉微信不用再通知了
+                }
+            }
+        }
+    }
+    //查询订单是否支付成功
+    public function isstatus(){
+        $url = "https://api.mch.weixin.qq.com/pay/orderquery";
+        //设置静态链接
+        $nativecheck = new \OrderQuery_pub;
+        $nativecheck->setParameter("out_trade_no",$_GET['out_trade_no']);//商户订单号(可post 可get)
+         
+        $xml = $nativecheck->createXml();
+        $response = $nativecheck->postXmlCurl($xml, $url);
+        $array_data = json_decode(json_encode(simplexml_load_string($response, 'SimpleXMLElement', LIBXML_NOCDATA)), true);
+         
+        echo $array_data['trade_state'];
+    }
+
+#notify 记录表 结构
+
+CREATE TABLE `echomod_notify` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `notify_unique` varchar(255) DEFAULT NULL COMMENT '用户标识',
+  `notify_text` text,
+  `notify_id` text,
+  `notify_wxnum` varchar(255) DEFAULT NULL COMMENT '微信订单号',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=53 DEFAULT CHARSET=utf8 ROW_FORMAT=DYNAMIC COMMENT='支付回调信息';
